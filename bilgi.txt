@@ -1,0 +1,1 @@
+haritayı güncellemek için excel dosyası indirilir, gerekli düzeltmeler yapıldıktan sonra CSV UTF-8 olarak Github'a yüklenir. Excel de ayırca Github'a yüklenir.
