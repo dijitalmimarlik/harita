@@ -515,7 +515,7 @@
 
   <script>
     // 🔗 GOOGLE SHEETS YAYINLANMIŞ CSV BAĞLANTISI
-    const GOOGLE_SHEETS_CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vQ3u3F319HaiyA8qPzaOI1HFw_I__xfm2QvqtigN0WRQp2K3q-AvQpSNBtDnBkJYKwaKhGJqZTIBGqA/pub?output=csv';
+    const YEREL_CSV_URL = 'semboller.csv';
 
     // 1. Haritayı Başlat (TÜRKİYE MERKEZLİ - KOORDİNATLAR GÜNCELLENDİ)
     const map = L.map('map', { zoomControl: false }).setView([39.0, 35.2], 6);
@@ -691,7 +691,7 @@
         return;
       }
 
-      Papa.parse(GOOGLE_SHEETS_CSV_URL, {
+      Papa.parse(YEREL_CSV_URL, {
         download: true,
         header: true,
         skipEmptyLines: true,
