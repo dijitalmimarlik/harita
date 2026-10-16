@@ -5,8 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>İMÜ İslam Tarihi ve Sanatları - Kültür Envanteri Haritası</title>
   
-  <!-- Leaflet CSS -->
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <!-- Leaflet CSS (Güvenli cdnjs Sunucusu) -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css" />
   <!-- Font: Inter -->
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 
@@ -397,3 +397,372 @@
     .building-card p {
       font-size: 0.82rem;
       color: #475569;
+      line-height: 1.5;
+      margin-bottom: 14px;
+    }
+
+    .building-card a {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 100%;
+      padding: 9px;
+      background: #0f172a;
+      color: #ffffff;
+      text-decoration: none;
+      font-size: 0.82rem;
+      font-weight: 600;
+      border-radius: 8px;
+      transition: background 0.2s ease;
+    }
+
+    .building-card a:hover {
+      background: #2563eb;
+    }
+    
+    /* Leaflet alt bilgi yazısını düzenleme */
+    .leaflet-control-attribution {
+      background: transparent !important;
+      font-size: 8px !important;
+      opacity: 0.5;
+      border: none !important;
+      box-shadow: none !important;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- 1. Üst Başlık Çubuğu (Navbar) -->
+  <header class="top-navbar">
+    <div class="navbar-brand">
+      <span></span> İMÜ İslam Tarihi ve Sanatları
+    </div>
+    <ul class="navbar-nav">
+      <li><a href="#">Ana Sayfa</a></li>
+      <li><a href="#">İletişim</a></li>
+    </ul>
+  </header>
+
+  <!-- Sol Taraf Yüzen Alan (Bilgi Kutusu + Filtreler + Liste) -->
+  <div class="sidebar-container">
+    
+    <!-- 2. Bilgi Kutusu -->
+    <div class="info-card">
+      <div class="univ-title">İstanbul Medeniyet Üniversitesi</div>
+      <div class="dept-title">İslam Tarihi ve Sanatları ABD</div>
+      <div class="map-title">Kültür Envanteri Haritası</div>
+    </div>
+
+    <!-- Filtreleme Paneli -->
+    <div class="filter-panel">
+      <h2>🏛️ Envanter Filtrele</h2>
+      
+      <!-- Hata/Yükleniyor durumu için ayrıldı, başarılı olunca JS ile gizlenecek -->
+      <div id="statusIndicator" class="status-badge">
+        ⏳ Veriler yükleniyor...
+      </div>
+
+      <div class="filter-group">
+        <label for="periodSelect">Tarih / Dönem</label>
+        <select id="periodSelect" class="filter-select">
+          <option value="all">Tüm Dönemler</option>
+          <option value="bizans">Bizans Dönemi</option>
+          <option value="osmanli">Osmanlı Dönemi</option>
+          <option value="ceneviz">Ceneviz Dönemi</option>
+        </select>
+      </div>
+
+      <div class="filter-group">
+        <label for="typeSelect">Yapı Türü</label>
+        <select id="typeSelect" class="filter-select">
+          <option value="all">Tüm Yapı Türleri</option>
+          <option value="dini">Dini Yapılar (Cami / Kilise)</option>
+          <option value="askeri">Askeri / Gözetleme</option>
+          <option value="sivil">Sivil / Kamu / Anıt</option>
+        </select>
+      </div>
+    </div>
+
+    <!-- 3. Yapı Listesi Paneli -->
+    <div class="list-panel">
+      <!-- ID eklendi, sayı JS ile buraya yazdırılacak -->
+      <h2 id="listHeading">📍 Görüntülenen Yapılar: 0 Adet</h2>
+      <ul id="buildingList" class="building-list">
+        <!-- JS ile dinamik olarak doldurulacak -->
+      </ul>
+    </div>
+
+  </div>
+
+  <!-- 4. Sağ Üst Ekran Görüntüsü Butonu -->
+  <button id="downloadMapBtn" class="download-btn" title="Görünen haritayı yüksek çözünürlüklü indir">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path>
+      <circle cx="12" cy="13" r="4"></circle>
+    </svg>
+    Haritayı Kaydet
+  </button>
+
+  <!-- Harita Konteyneri -->
+  <div id="map"></div>
+
+  <!-- Leaflet JS (Güvenli cdnjs Sunucusu) -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+  <!-- PapaParse CSV Parser JS -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+  <!-- html2canvas JS (Ekran Görüntüsü İçin) -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+
+  <script>
+    // 🔗 YEREL CSV BAĞLANTISI
+    const YEREL_CSV_URL = 'semboller.csv';
+
+    // 1. Haritayı Başlat (TÜRKİYE MERKEZLİ)
+    const map = L.map('map', { zoomControl: false }).setView([39.0, 35.2], 6);
+    L.control.zoom({ position: 'bottomright' }).addTo(map);
+
+    // 2. Aydınlık ve Sade Altlık (Stadia Maps)
+    L.tileLayer('https://tiles.stadiamaps.com/tiles/alidade_smooth/{z}/{x}/{y}{r}.png', {
+      maxZoom: 20,
+      attribution: '&copy; <a href="https://stadiamaps.com/">Stadia Maps</a>, &copy; <a href="https://openmaptiles.org/">OpenMapTiles</a> &copy; <a href="http://openstreetmap.org">OpenStreetMap</a> contributors'
+    }).addTo(map);
+
+    // 3. SVG İkon Kütüphanesi
+    const categoryConfig = {
+      dini: {
+        color: '#d97706',
+        label: 'Dini Yapı',
+        svg: `<svg viewBox="0 0 24 24"><path d="M12 2L10 5H14L12 2ZM12 6C7 6 4 10 4 15V21H20V15C20 10 17 6 12 6ZM12 18C10.9 18 10 17.1 10 16C10 14.9 10.9 14 12 14C13.1 14 14 14.9 14 16C14 17.1 13.1 18 12 18Z"/></svg>`
+      },
+      askeri: {
+        color: '#dc2626',
+        label: 'Askeri Yapı',
+        svg: `<svg viewBox="0 0 24 24"><path d="M12 1L3 5V11C3 16.55 6.84 21.74 12 23C17.16 21.74 21 16.55 21 11V5L12 1Z"/></svg>`
+      },
+      sivil: {
+        color: '#0284c7',
+        label: 'Sivil Mimari',
+        svg: `<svg viewBox="0 0 24 24"><path d="M12 3L2 12H5V20H19V12H22L12 3ZM12 8.75C13.24 8.75 14.25 9.76 14.25 11C14.25 12.24 13.24 13.25 12 13.25C10.76 13.25 9.75 12.24 9.75 11C9.75 9.76 10.76 8.75 12 8.75Z"/></svg>`
+      }
+    };
+
+    // Yedek / Örnek Veri Seti
+    const fallbackBuildings = [
+      {
+        id: 1,
+        name: "Ayasofya-i Kebir Cami-i Şerifi",
+        period: "bizans",
+        type: "dini",
+        coords: [41.0086, 28.9802],
+        year: "İnşa: M.S. 537",
+        desc: "Bizans İmparatoru I. Justinianus tarafından yaptırılan, mimarlık tarihinin başyapıtlarından biri.",
+        image: "https://images.unsplash.com/photo-1541432901042-2d8bd64b4a9b?auto=format&fit=crop&w=400&q=80",
+        url: "https://tr.wikipedia.org/wiki/Ayasofya"
+      },
+      {
+        id: 2,
+        name: "Galata Kulesi",
+        period: "ceneviz",
+        type: "askeri",
+        coords: [41.0256, 28.9744],
+        year: "İnşa: M.S. 1348",
+        desc: "Cenevizliler tarafından Galata surlarının bir parçası ve gözetleme kulesi olarak inşa edilmiştir.",
+        image: "https://images.unsplash.com/photo-1527838832700-54595d2f408e?auto=format&fit=crop&w=400&q=80",
+        url: "https://tr.wikipedia.org/wiki/Galata_Kulesi"
+      }
+    ];
+
+    let buildingsData = [];
+    let markerGroup = L.layerGroup().addTo(map);
+    let markersMap = {}; 
+
+    // 4. Özel İkon Fonksiyonu
+    function createCustomIcon(type) {
+      const config = categoryConfig[type] || categoryConfig.sivil;
+      return L.divIcon({
+        className: 'custom-icon-wrapper',
+        html: `
+          <div class="custom-marker" style="--marker-color: ${config.color}">
+            ${config.svg}
+          </div>
+        `,
+        iconSize: [36, 36],
+        iconAnchor: [18, 18],
+        popupAnchor: [0, -18]
+      });
+    }
+
+    // 5. Marker Çizme & Filtreleme & Listeyi Güncelleme
+    function renderMarkers() {
+      markerGroup.clearLayers();
+      markersMap = {}; 
+
+      const selectedPeriod = document.getElementById('periodSelect').value;
+      const selectedType = document.getElementById('typeSelect').value;
+
+      let filtered = buildingsData.filter(b => {
+        const periodMatch = (selectedPeriod === 'all') || (b.period === selectedPeriod);
+        const typeMatch = (selectedType === 'all') || (b.type === selectedType);
+        return periodMatch && typeMatch;
+      });
+
+      filtered.sort((a, b) => a.name.localeCompare(b.name, 'tr'));
+
+      filtered.forEach(building => {
+        const config = categoryConfig[building.type] || categoryConfig.sivil;
+        
+        const popupContent = `
+          <div class="building-card">
+            ${building.image ? `<img src="${building.image}" alt="${building.name}">` : ''}
+            <div class="badge-container">
+              <span class="badge badge-${building.type}">${config.label}</span>
+            </div>
+            <h3>${building.name}</h3>
+            <div class="year">${building.year}</div>
+            <p>${building.desc}</p>
+            <a href="${building.url}" target="_blank" rel="noopener noreferrer">
+              Devamını Oku &rarr;
+            </a>
+          </div>
+        `;
+
+        const marker = L.marker(building.coords, {
+          icon: createCustomIcon(building.type)
+        })
+        .bindTooltip(building.name, {
+          direction: 'top',   
+          offset: [0, -20]    
+        })
+        .bindPopup(popupContent);
+
+        markerGroup.addLayer(marker);
+        markersMap[building.id] = marker; 
+      });
+
+      updateBuildingList(filtered);
+    }
+
+    // 6. Sol Menüdeki Listeyi Oluşturan ve Sayıyı Güncelleyen Fonksiyon
+    function updateBuildingList(buildings) {
+      const listContainer = document.getElementById('buildingList');
+      const listHeading = document.getElementById('listHeading');
+      
+      listContainer.innerHTML = ''; 
+
+      listHeading.innerHTML = `📍 Görüntülenen Yapılar: ${buildings.length} Adet`;
+
+      if (buildings.length === 0) {
+        listContainer.innerHTML = '<li style="cursor:default; background:transparent;">Eşleşen yapı bulunamadı.</li>';
+        return;
+      }
+
+      buildings.forEach(building => {
+        const li = document.createElement('li');
+        li.textContent = building.name;
+        
+        li.onclick = () => {
+          map.flyTo(building.coords, 15, {
+            animate: true,
+            duration: 1.2 
+          });
+          
+          setTimeout(() => {
+            if(markersMap[building.id]) {
+              markersMap[building.id].openPopup();
+            }
+          }, 1250); 
+        };
+        
+        listContainer.appendChild(li);
+      });
+    }
+
+    // 7. Yerel CSV Verisini Çekme
+    function fetchCSVData() {
+      const statusEl = document.getElementById('statusIndicator');
+
+      if (!YEREL_CSV_URL) {
+        console.warn("CSV URL'si tanımlanmadı. Örnek veriler gösteriliyor.");
+        statusEl.innerHTML = "💡 Örnek Modu (Veri Bağlanmadı)";
+        buildingsData = fallbackBuildings;
+        renderMarkers();
+        return;
+      }
+
+      Papa.parse(YEREL_CSV_URL, {
+        download: true,
+        header: true,
+        skipEmptyLines: true,
+        complete: function(results) {
+          if (results.data && results.data.length > 0) {
+            buildingsData = results.data.map((row, index) => ({
+              id: index + 1, 
+              name: row.name ? row.name.trim() : 'İsimsiz Yapı',
+              period: row.period ? row.period.trim().toLowerCase() : 'diğer',
+              type: row.type ? row.type.trim().toLowerCase() : 'sivil',
+              coords: [parseFloat(row.lat), parseFloat(row.lng)],
+              year: row.year ? row.year.trim() : '',
+              desc: row.desc ? row.desc.trim() : '',
+              image: row.image ? row.image.trim() : '',
+              url: row.url ? row.url.trim() : '#'
+            })).filter(b => !isNaN(b.coords[0]) && !isNaN(b.coords[1]));
+
+            statusEl.style.display = 'none';
+            renderMarkers();
+          } else {
+            statusEl.style.display = 'flex';
+            statusEl.innerHTML = "⚠️ Tablo Boş veya Okunamadı";
+            buildingsData = fallbackBuildings;
+            renderMarkers();
+          }
+        },
+        error: function(err) {
+          console.error("CSV Okuma Hatası:", err);
+          statusEl.style.display = 'flex';
+          statusEl.innerHTML = "❌ Canlı Veri Bağlantı Hatası";
+          buildingsData = fallbackBuildings;
+          renderMarkers();
+        }
+      });
+    }
+
+    // 8. Haritayı Yüksek Çözünürlüklü Kaydetme Fonksiyonu
+    document.getElementById('downloadMapBtn').addEventListener('click', function() {
+      const btn = this;
+      const originalHTML = btn.innerHTML;
+      
+      btn.innerHTML = '⏳ İşleniyor...';
+      btn.style.pointerEvents = 'none';
+
+      const mapElement = document.getElementById('map');
+
+      html2canvas(mapElement, {
+        useCORS: true,       
+        scale: 3,            
+        backgroundColor: null 
+      }).then(canvas => {
+        const link = document.createElement('a');
+        link.download = 'kultur-envanteri-haritasi.png'; 
+        link.href = canvas.toDataURL('image/png');
+        link.click();
+        
+        btn.innerHTML = originalHTML;
+        btn.style.pointerEvents = 'auto';
+      }).catch(err => {
+        console.error('Ekran görüntüsü alınamadı:', err);
+        alert('Harita kaydedilirken bir hata oluştu.');
+        
+        btn.innerHTML = originalHTML;
+        btn.style.pointerEvents = 'auto';
+      });
+    });
+
+    // 9. Etkinlik Dinleyicileri (Filtreleme)
+    document.getElementById('periodSelect').addEventListener('change', renderMarkers);
+    document.getElementById('typeSelect').addEventListener('change', renderMarkers);
+
+    // Başlangıçta verileri yükle
+    fetchCSVData();
+  </script>
+</body>
+</html>
